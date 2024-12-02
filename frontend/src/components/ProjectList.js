@@ -1,18 +1,12 @@
-import React, { useState } from "react";
-import {
-  CORS_PROXY,
-  API_KEY,
-  BASE_URL,
-  API_RATE_LIMIT,
-} from "../constants/api";
+import React, { useState, useEffect } from "react";
 import {
   formatNumber,
-  formatTimeAgo,
   getLiquidityClassName,
   formatLiquidityFriendly,
 } from "../utils/number";
-import axios from "axios";
 import moment from "moment";
+import { io } from "socket.io-client";
+const SOCKET_URL = "http://localhost:5000";
 
 // Configuration de moment.js en français
 moment.locale("fr");
@@ -24,157 +18,46 @@ const ProjectList = () => {
   const [liquidityMax, setLiquidityMax] = useState(10);
   const [tokens, setTokens] = useState([]);
   const [searchInProgress, setSearchInProgress] = useState(false);
+  const [socket, setSocket] = useState(null);
 
-  const sleep = (ms) => {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  };
+  useEffect(() => {
+    const socketConnection = io(SOCKET_URL);
+    setSocket(socketConnection);
 
-  const makeApiCall = async (url) => {
-    const proxyUrl = CORS_PROXY + url;
+    socketConnection.on("searchToken", (token) => {
+      setTokens((prevTokens) => [...prevTokens, token]);
+    });
 
-    try {
-      const response = await axios(proxyUrl, {
-        headers: {
-          "X-API-KEY": API_KEY,
-          accept: "application/json",
-          origin: window.location.origin,
-        },
-      });
+    socketConnection.on("searchComplete", () => {
+      setSearchInProgress(false);
+      console.log("Search complete");
+    });
 
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP! statut: ${response.status}`);
-      }
+    socketConnection.on("searchError", (error) => {
+      setSearchInProgress(false);
+      console.error("Search error:", error);
+    });
 
-      const text = await response.text();
+    return () => {
+      socketConnection.disconnect();
+    };
+  }, []);
 
-      try {
-        const data = JSON.parse(text);
-        return data;
-      } catch (e) {
-        throw new Error(`Erreur de parsing JSON : ${e.message}`);
-      }
-    } catch (error) {
-      console.log(error);
-      throw error;
-    }
-  };
-
-  const getTokenHolders = async (chain, address, retryCount = 0) => {
-    try {
-      const data = await makeApiCall(
-        `${BASE_URL}/v2/token/${chain}/${address}/info`
-      );
-      const holders = data?.data?.holders;
-
-      if (holders === undefined || holders === null) {
-        throw new Error("Données de holders non trouvées");
-      }
-
-      return holders;
-    } catch (error) {
-      if (retryCount < 2) {
-        await sleep(API_RATE_LIMIT);
-        return getTokenHolders(chain, address, retryCount + 1);
-      }
-
-      return null;
-    }
-  };
-
-  const getLiquidity = async (poolAddress, retryCount = 0) => {
-    try {
-      const data = await makeApiCall(
-        `${BASE_URL}/v2/pool/ether/${poolAddress}/liquidity`
-      );
-      return data?.data?.liquidity || 0;
-    } catch (error) {
-      if (retryCount < 2) {
-        await sleep(API_RATE_LIMIT);
-        return getLiquidity(poolAddress, retryCount + 1);
-      }
-      throw error;
-    }
+  const startSearch = () => {
+    if (!socket) return;
+    setTokens([]);
+    setSearchInProgress(true);
+    socket.emit("startSearch", {
+      daysMin,
+      daysMax,
+      liquidityMin,
+      liquidityMax,
+    });
   };
 
   const stopSearch = () => {
-    setSearchInProgress(false);
-  };
-
-  const searchTokens = async () => {
-    if (searchInProgress) return;
+    socket.emit("stopSearch");
     setSearchInProgress(true);
-    await searchTokensProgress();
-  };
-
-  const searchTokensProgress = async () => {
-    try {
-      const fromDate = moment().subtract(daysMax, "days").toISOString();
-      const toDate = moment().subtract(daysMin, "days").toISOString();
-
-      const url = `${BASE_URL}/v2/pool/ether?sort=creationTime&order=desc&from=${fromDate}&to=${toDate}&page=0&pageSize=50`;
-      const data = await makeApiCall(url);
-      await sleep(API_RATE_LIMIT);
-
-      if (!data.data || !data.data.results) {
-        throw new Error("Format de réponse API invalide");
-      }
-
-      let matchingPools = 0;
-
-      for (let i = 0; i < data.data.results.length; i++) {
-        const pool = data.data.results[i];
-
-        if (pool && pool.address) {
-          try {
-            const liquidity = await getLiquidity(pool.address);
-            const holders = await getTokenHolders(
-              "ether",
-              pool.mainToken?.address
-            );
-
-            if (
-              Number(liquidity) <= liquidityMax &&
-              Number(liquidity) >= liquidityMin
-            ) {
-              matchingPools++;
-
-              const tokenCard = {
-                holders: holders !== null ? holders.toLocaleString() : "",
-                time: formatTimeAgo(pool.creationTime),
-                name: `${pool.mainToken?.name || "Inconnu"} (${
-                  pool.mainToken?.symbol || "Inconnu"
-                })`,
-                dextoolsUrl: `https://www.dextools.io/app/en/ether/pair-explorer/${pool.address}`,
-                liquidity: liquidity,
-                exchange: pool.exchangeName || "N/A",
-                pair:
-                  (pool.mainToken?.symbol || "Inconnu") +
-                  " / " +
-                  (pool.sideToken?.symbol || "Inconnu"),
-                creationDate: moment(pool.creationTime).format(
-                  "DD/MM/YYYY HH:mm:ss"
-                ),
-                tokenAddress: pool.mainToken?.address || "N/A",
-                poolAddress: pool.address || "N/A",
-              };
-              setTokens([...tokens, tokenCard]);
-            }
-
-            await sleep(API_RATE_LIMIT);
-          } catch (error) {
-            await sleep(API_RATE_LIMIT);
-            continue;
-          }
-        }
-      }
-
-      if (matchingPools === 0) {
-      }
-    } catch (error) {
-      console.error("Erreur de recherche :", error);
-    } finally {
-      setSearchInProgress(false);
-    }
   };
 
   return (
@@ -260,7 +143,7 @@ const ProjectList = () => {
           </div>
         </div>
         <div className="button-group">
-          <button onClick={searchTokens} disabled={searchInProgress}>
+          <button onClick={startSearch} disabled={searchInProgress}>
             To research
           </button>
           <button

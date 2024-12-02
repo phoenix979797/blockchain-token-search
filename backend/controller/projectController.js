@@ -2,7 +2,7 @@ const Project = require("../model/Project");
 const axios = require("axios");
 
 // Fetch projects and save them to the database
-const fetchProjects = async (req, res) => {
+exports.fetchProjects = async (req, res) => {
   try {
     const response = await axios.get(
       `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}/getTransactions`
@@ -35,7 +35,7 @@ const fetchProjects = async (req, res) => {
 };
 
 // Get all saved projects from the database
-const getProjects = async (req, res) => {
+exports.getProjects = async (req, res) => {
   try {
     const projects = await Project.find();
     res.status(200).json(projects);
@@ -43,5 +43,3 @@ const getProjects = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-module.exports = { fetchProjects, getProjects };
