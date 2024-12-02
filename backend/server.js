@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const dotenv = require("dotenv");
+const moment = require("moment");
 const cors = require("cors");
 const connectDB = require("./config/db");
 const routes = require("./routes");
@@ -11,9 +12,14 @@ const {
   getTokenHolders,
   getLiquidity,
 } = require("./utils/apiUtils");
+const sleep = require("./utils/sleep");
+const { formatTimeAgo } = require("./utils/number");
 
 dotenv.config();
 connectDB();
+
+// Configuration de moment.js en français
+moment.locale("fr");
 
 const app = express();
 const server = http.createServer(app);
@@ -45,9 +51,13 @@ io.on("connection", (socket) => {
 
       searchInProgress = true;
 
+      const fromDate = moment().subtract(daysMax, "days").toISOString();
+      const toDate = moment().subtract(daysMin, "days").toISOString();
+
       try {
         const url = `${BASE_URL}/v2/pool/ether?sort=creationTime&order=desc&from=${fromDate}&to=${toDate}&page=0&pageSize=50`;
         const data = await makeApiCall(url);
+        console.log(data);
         await sleep(API_RATE_LIMIT);
 
         if (!data.data || !data.data.results) {
@@ -61,6 +71,7 @@ io.on("connection", (socket) => {
           const pool = data.data.results[i];
 
           if (pool && pool.address) {
+            console.log(pool);
             try {
               const liquidity = await getLiquidity(pool.address);
               const holders = await getTokenHolders(
@@ -68,12 +79,12 @@ io.on("connection", (socket) => {
                 pool.mainToken?.address
               );
 
+              console.log(liquidity);
+
               if (
                 Number(liquidity) <= liquidityMax &&
                 Number(liquidity) >= liquidityMin
               ) {
-                matchingPools++;
-
                 const tokenCard = {
                   holders: holders !== null ? holders.toLocaleString() : "",
                   time: formatTimeAgo(pool.creationTime),
@@ -98,12 +109,14 @@ io.on("connection", (socket) => {
 
               await sleep(API_RATE_LIMIT);
             } catch (error) {
+              console.log(error);
               await sleep(API_RATE_LIMIT);
               continue;
             }
           }
         }
         socket.emit("searchComplete");
+        console.log("searchComplete");
       } catch (error) {
         console.error(error);
         socket.emit("searchError", { message: error.message });

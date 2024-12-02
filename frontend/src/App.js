@@ -1,10 +1,10 @@
-import ProjectList from "./components/ProjectList";
-import "./App.css";
+import TokenSearch from "./components/TokenSearch";
+import "./style/base.scss";
 
 function App() {
   return (
     <div className="App">
-      <ProjectList />
+      <TokenSearch />
     </div>
   );
 }

@@ -5,12 +5,9 @@ const {
   BASE_URL,
   API_RATE_LIMIT,
 } = require("../constants/api");
+const sleep = require("./sleep");
 
-exports.sleep = (ms) => {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};
-
-exports.makeApiCall = async (url) => {
+const makeApiCall = async (url) => {
   try {
     const proxyUrl = CORS_PROXY + url;
 
@@ -18,6 +15,7 @@ exports.makeApiCall = async (url) => {
       headers: {
         "X-API-KEY": API_KEY,
         accept: "application/json",
+        "x-requested-with": "XMLHttpRequest",
       },
     });
     return response.data;
@@ -27,7 +25,7 @@ exports.makeApiCall = async (url) => {
   }
 };
 
-exports.getTokenHolders = async (chain, address, retryCount = 0) => {
+const getTokenHolders = async (chain, address, retryCount = 0) => {
   try {
     const url = `${BASE_URL}/v2/token/${chain}/${address}/info`;
     const data = await makeApiCall(url);
@@ -47,7 +45,7 @@ exports.getTokenHolders = async (chain, address, retryCount = 0) => {
   }
 };
 
-exports.getLiquidity = async (poolAddress, retryCount = 0) => {
+const getLiquidity = async (poolAddress, retryCount = 0) => {
   try {
     const url = `${BASE_URL}/v2/pool/ether/${poolAddress}/liquidity`;
     const data = await makeApiCall(url);
@@ -60,3 +58,5 @@ exports.getLiquidity = async (poolAddress, retryCount = 0) => {
     throw error;
   }
 };
+
+module.exports = { makeApiCall, getLiquidity, getTokenHolders };

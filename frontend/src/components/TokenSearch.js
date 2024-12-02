@@ -11,12 +11,25 @@ const SOCKET_URL = "http://localhost:5000";
 // Configuration de moment.js en français
 moment.locale("fr");
 
-const ProjectList = () => {
+const TokenSearch = () => {
   const [daysMin, setDaysMin] = useState(0);
   const [daysMax, setDaysMax] = useState(7);
   const [liquidityMin, setLiquidityMin] = useState(0);
   const [liquidityMax, setLiquidityMax] = useState(10);
-  const [tokens, setTokens] = useState([]);
+  const [tokens, setTokens] = useState([
+    {
+      holders: "",
+      time: "",
+      name: "",
+      dextoolsUrl: "",
+      liquidity: "",
+      exchange: "",
+      pair: "",
+      creationDate: "",
+      tokenAddress: "",
+      poolAddress: "",
+    },
+  ]);
   const [searchInProgress, setSearchInProgress] = useState(false);
   const [socket, setSocket] = useState(null);
 
@@ -61,9 +74,18 @@ const ProjectList = () => {
   };
 
   return (
-    <div>
+    <div className="token-search">
       <div className="search-container">
-        <h1>Token Search</h1>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h1>Token Search</h1>
+          <button style={{ height: "100%" }}>Access BDD</button>
+        </div>
         <div className="proxy-setup">
           <h3>⚠️ System Requirements</h3>
           <div className="step">
@@ -159,11 +181,15 @@ const ProjectList = () => {
         {tokens.map((token) => (
           <div className="token-card" key={token.name}>
             <div className="time-badge">{token.time}</div>
+            <div className="operation">
+              <button>Hide</button>
+              <button>Add BDD</button>
+            </div>
             <div className="token-header">
               <h3 className="token-name">
                 {token.name}
                 {token.holders && (
-                  <span className="holders-badge">{token.holders}</span>
+                  <span className="holders-badge">{token.holders} holders</span>
                 )}
               </h3>
               <div className="token-links">
@@ -220,4 +246,4 @@ const ProjectList = () => {
   );
 };
 
-export default ProjectList;
+export default TokenSearch;
