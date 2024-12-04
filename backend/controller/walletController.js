@@ -2,6 +2,7 @@ const { getTransactions } = require("../utils/etherscan");
 const { sendTelegramMessage } = require("../utils/telegram");
 const Wallet = require("../model/Wallet");
 const Transaction = require("../model/Transaction");
+const ethers = require("ethers");
 
 // Get all wallets
 const getAllWallets = async (req, res) => {
@@ -38,6 +39,46 @@ const toggleWalletStatus = async (req, res) => {
   }
 };
 
+// Remove wallet by ID
+const removeWallet = async (req, res) => {
+  const { walletId } = req.params;
+
+  try {
+    const deletedWallet = await Wallet.findByIdAndDelete(walletId);
+    if (!deletedWallet) {
+      return res.status(404).json({ error: "Wallet not found" });
+    }
+    return res
+      .status(200)
+      .json({ message: "Wallet removed successfully", walletId });
+  } catch (error) {
+    console.error("Error removing wallet:", error);
+    return res.status(500).json({ error: "Failed to remove wallet" });
+  }
+};
+
+const getTokenSymbol = async (tokenAddress) => {
+  try {
+    const response = await fetch(
+      `https://api.etherscan.io/api?module=token&action=tokeninfo&contractaddress=${tokenAddress}&apikey=${process.env.ETHERSCAN_API_KEY}`
+    );
+    const data = await response.json();
+
+    if (data.status === "1" && data.result.length > 0) {
+      return data.result[0].symbol || "UNKNOWN";
+    } else {
+      console.error("Etherscan API error:", data.message);
+      return "UNKNOWN";
+    }
+  } catch (error) {
+    console.error(
+      `Failed to fetch token symbol for address: ${tokenAddress}`,
+      error
+    );
+    return "UNKNOWN";
+  }
+};
+
 // Function to check transactions and send alerts for new transactions
 const checkTransactions = async () => {
   try {
@@ -47,6 +88,7 @@ const checkTransactions = async () => {
     for (const wallet of activeWallets) {
       // Fetch the latest transactions for the wallet
       const transactions = await getTransactions(wallet.walletAddress);
+      const tokenSymbol = await getTokenSymbol(wallet.walletAddress);
 
       for (const tx of transactions) {
         // Check if the transaction hash already exists in the Transaction collection
@@ -59,18 +101,18 @@ const checkTransactions = async () => {
           console.log("New transaction detected:", tx.hash);
 
           // Assuming tx.to is a buy and tx.from is a sell (simplified logic)
-          let type = "";
+          let type = "unknown";
           if (tx.to === wallet.walletAddress) {
             // If the wallet is the receiver, it's a buy
             type = "buy";
-            sendTelegramMessage(
-              `🚨 PURCHASE ⬆️ - Wallet: ${wallet.walletName}\nDate: ${tx.timeStamp}\nToken: ${tx.tokenSymbol}\nTransaction: https://etherscan.io/tx/${tx.hash}`
+            await sendTelegramMessage(
+              `🚨 PURCHASE ⬆️ - Wallet: ${wallet.walletName}\nDate: ${tx.timeStamp}\nToken: ${tokenSymbol}\nTransaction: https://etherscan.io/tx/${tx.hash}`
             );
           } else if (tx.from === wallet.walletAddress) {
             // If the wallet is the sender, it's a sell
             type = "sell";
-            sendTelegramMessage(
-              `🚨 SALE ⬇️ - Wallet: ${wallet.walletName}\nDate: ${tx.timeStamp}\nToken: ${tx.tokenSymbol}\nTransaction: https://etherscan.io/tx/${tx.hash}`
+            await sendTelegramMessage(
+              `🚨 SALE ⬇️ - Wallet: ${wallet.walletName}\nDate: ${tx.timeStamp}\nToken: ${tokenSymbol}\nTransaction: https://etherscan.io/tx/${tx.hash}`
             );
           }
 
@@ -78,15 +120,15 @@ const checkTransactions = async () => {
           const newTransaction = new Transaction({
             walletId: wallet._id,
             transactionHash: tx.hash,
-            tokenSymbol: tx.tokenSymbol,
+            tokenSymbol,
             timestamp: new Date(tx.timeStamp * 1000), // Convert timestamp to Date
             value: tx.value, // Assuming tx.value is available, adjust as needed
-            type: type,
+            type,
           });
 
           await newTransaction.save();
         } else {
-          console.log("Transaction already processed:", tx.hash);
+          // console.log("Transaction already processed:", tx.hash);
         }
       }
     }
@@ -99,5 +141,6 @@ module.exports = {
   getAllWallets,
   registerWallet,
   toggleWalletStatus,
+  removeWallet,
   checkTransactions,
 };

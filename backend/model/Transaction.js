@@ -12,7 +12,7 @@ const transactionSchema = new mongoose.Schema({
   tokenSymbol: { type: String, required: true },
   timestamp: { type: Date, required: true },
   value: { type: Number, required: true },
-  type: { type: String, enum: ["buy", "sell"], required: true }, // Track whether it's a buy or sell
+  type: { type: String, enum: ["buy", "sell", "unknown"], required: true }, // Track whether it's a buy or sell
 });
 
 const Transaction = mongoose.model("Transaction", transactionSchema);
