@@ -6,7 +6,10 @@ import {
 } from "../utils/number";
 import moment from "moment";
 import { io } from "socket.io-client";
-const SOCKET_URL = "http://localhost:5000";
+import axios from "axios";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import TokenModal from "./BDDModal";
 
 // Configuration de moment.js en français
 moment.locale("fr");
@@ -16,29 +19,23 @@ const TokenSearch = () => {
   const [daysMax, setDaysMax] = useState(7);
   const [liquidityMin, setLiquidityMin] = useState(0);
   const [liquidityMax, setLiquidityMax] = useState(10);
-  const [tokens, setTokens] = useState([
-    {
-      holders: "",
-      time: "",
-      name: "",
-      dextoolsUrl: "",
-      liquidity: "",
-      exchange: "",
-      pair: "",
-      creationDate: "",
-      tokenAddress: "",
-      poolAddress: "",
-    },
-  ]);
+  const [tokens, setTokens] = useState([]);
   const [searchInProgress, setSearchInProgress] = useState(false);
+  const [autoInProgress, setAutoInProgress] = useState(false);
   const [socket, setSocket] = useState(null);
+  const [bddTokens, setBddTokens] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    const socketConnection = io(SOCKET_URL);
+    const socketConnection = io(process.env.SOCKET_URL);
     setSocket(socketConnection);
 
     socketConnection.on("searchToken", (token) => {
-      setTokens((prevTokens) => [...prevTokens, token]);
+      if (token.token) setTokens((prevTokens) => [...prevTokens, token.token]);
+      setProgress(token.progress);
+      setAttempt(token.page);
     });
 
     socketConnection.on("searchComplete", () => {
@@ -66,11 +63,90 @@ const TokenSearch = () => {
       liquidityMin,
       liquidityMax,
     });
+    setProgress(0);
+    setAttempt(0);
   };
 
   const stopSearch = () => {
     socket.emit("stopSearch");
-    setSearchInProgress(true);
+    setSearchInProgress(false);
+  };
+
+  const hideToken = (index) => {
+    const tmp = [...tokens];
+    tmp.splice(index, 1);
+    setTokens(tmp);
+  };
+
+  const addToken = async (index) => {
+    try {
+      await axios.post("/api/token", tokens[index]);
+
+      // Show a success notification
+      toast.success(`Token has been added successfully!`);
+    } catch (error) {
+      // Show an error notification
+      toast.error("Error saving token. Please try again.");
+    }
+  };
+
+  const accessBdd = async () => {
+    const { data } = await axios.get("/api/token");
+    setBddTokens(data);
+    setIsModalOpen(true);
+  };
+
+  const addAutomation = () => {
+    if (!socket) return;
+    if (autoInProgress) {
+      setAutoInProgress(false);
+      socket.emit("stopAuto");
+    } else {
+      setAutoInProgress(true);
+      socket.emit("startAuto", {
+        daysMin,
+        daysMax,
+        liquidityMin,
+        liquidityMax,
+      });
+    }
+  };
+
+  const handleRename = async (token) => {
+    const newName = prompt("Enter a new name for the token:", token.name);
+    if (newName) {
+      try {
+        await axios.put(`/api/token/${token._id}`, { name: newName });
+        setBddTokens((prevTokens) =>
+          prevTokens.map((t) =>
+            t._id === token._id ? { ...t, name: newName } : t
+          )
+        );
+
+        // Show a success notification
+        toast.success(`Token name has been changed successfully!`);
+      } catch (error) {
+        // Show an error notification
+        toast.error("Error saving token. Please try again.");
+      }
+    }
+  };
+
+  const handleRemove = async (token) => {
+    if (window.confirm(`Are you sure you want to delete ${token.name}?`)) {
+      try {
+        await axios.delete(`/api/token/${token._id}`);
+        setBddTokens((prevTokens) =>
+          prevTokens.filter((t) => t._id !== token._id)
+        );
+
+        // Show a success notification
+        toast.success(`Token has been deleted successfully!`);
+      } catch (error) {
+        // Show an error notification
+        toast.error("Error deleting token. Please try again.");
+      }
+    }
   };
 
   return (
@@ -84,21 +160,15 @@ const TokenSearch = () => {
           }}
         >
           <h1>Token Search</h1>
-          <button style={{ height: "100%" }}>Access BDD</button>
-        </div>
-        <div className="proxy-setup">
-          <h3>⚠️ System Requirements</h3>
-          <div className="step">
-            <span className="step-number">1.</span> First enable CORS proxy:
+          <div>
             <button
-              onClick={() =>
-                window.open(
-                  "https://cors-anywhere.herokuapp.com/corsdemo",
-                  "_blank"
-                )
-              }
+              style={{ height: "100%", marginRight: 5 }}
+              onClick={addAutomation}
             >
-              Enable CORS proxy
+              {autoInProgress ? "Stop" : "Start"} Automation
+            </button>
+            <button style={{ height: "100%" }} onClick={accessBdd}>
+              Access BDD
             </button>
           </div>
         </div>
@@ -122,7 +192,7 @@ const TokenSearch = () => {
               type="number"
               min="0"
               value={daysMin}
-              onChange={setDaysMin}
+              onChange={(e) => setDaysMin(e.target.value)}
             />
           </div>
           <div className="input-group">
@@ -132,7 +202,7 @@ const TokenSearch = () => {
               type="number"
               min="0"
               value={daysMax}
-              onChange={setDaysMax}
+              onChange={(e) => setDaysMax(e.target.value)}
             />
           </div>
         </div>
@@ -150,7 +220,7 @@ const TokenSearch = () => {
               type="number"
               min="0"
               value={liquidityMin}
-              onChange={setLiquidityMin}
+              onChange={(e) => setLiquidityMin(e.target.value)}
             />
           </div>
           <div className="input-group">
@@ -160,7 +230,7 @@ const TokenSearch = () => {
               type="number"
               min="0"
               value={liquidityMax}
-              onChange={setLiquidityMax}
+              onChange={(e) => setLiquidityMax(e.target.value)}
             />
           </div>
         </div>
@@ -178,12 +248,14 @@ const TokenSearch = () => {
       </div>
 
       <div className="results">
-        {tokens.map((token) => (
+        {tokens.map((token, index) => (
           <div className="token-card" key={token.name}>
             <div className="time-badge">{token.time}</div>
             <div className="operation">
-              <button>Hide</button>
-              <button>Add BDD</button>
+              <button onClick={() => hideToken(index)}>Hide</button>
+              <button onClick={() => addToken(index)}>
+                {token?.bdd ? "Remove BDD" : "Add BDD"}
+              </button>
             </div>
             <div className="token-header">
               <h3 className="token-name">
@@ -238,10 +310,42 @@ const TokenSearch = () => {
                 <div className="info-value address">{token.poolAddress}</div>
               </div>
             </div>
+            <div className="token-info" style={{ marginTop: 15 }}>
+              <div className="info-item">
+                <div className="info-label">Add Address</div>
+                <div className="info-value address">{token.firstAddress}</div>
+              </div>
+              <div className="info-item">
+                <div className="info-label">Next Address</div>
+                <div className="info-value address">{token.nextAddress}</div>
+              </div>
+            </div>
           </div>
         ))}
+        {searchInProgress ? (
+          <div className="token-card">
+            <div className="spinner-container">
+              <div className="spinner"></div>
+              <p>Searching Tokens...</p>
+              <p>
+                Attempt {attempt + 1} - {progress}%
+              </p>
+            </div>
+          </div>
+        ) : (
+          <></>
+        )}
       </div>
-      <div className="debug-info"></div>
+      {isModalOpen && (
+        <TokenModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          tokens={bddTokens}
+          onRename={handleRename}
+          onRemove={handleRemove}
+        />
+      )}
+      <ToastContainer />
     </div>
   );
 };
