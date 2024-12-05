@@ -1,14 +1,13 @@
 // App.js
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-import Table from "rc-table";
-import Pagination from "rc-pagination";
 import TradingViewWidget from "./TradingViewWidget";
-import "rc-table/assets/index.css";
-import "rc-pagination/assets/index.css";
+import { Table, Pagination, Spin } from "antd";
 
 function TokenVisualization() {
-  const [tokenAddress, setTokenAddress] = useState("");
+  const [tokenAddress, setTokenAddress] = useState(
+    "0x58c7cc591cb842a362e45345259932c3fcc96af4"
+  );
   const [transactions, setTransactions] = useState(null);
   const [symbol, setSymbol] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -32,6 +31,12 @@ function TokenVisualization() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    (async () => {
+      await fetchTransactions();
+    })();
+  }, []);
 
   const onPageChange = async (page) => {
     setPage(page);
@@ -73,7 +78,9 @@ function TokenVisualization() {
         <h1>Token Transactions</h1>
         <div style={{ marginBottom: 5 }}>
           <div className="input-group">
-            <label htmlFor="tokenAddress">Token Address:</label>
+            <label htmlFor="tokenAddress">
+              Token Address: 0x58c7cc591cb842a362e45345259932c3fcc96af4
+            </label>
             <input
               id="tokenAddress"
               value={tokenAddress}
@@ -87,10 +94,13 @@ function TokenVisualization() {
             Fetch Transactions
           </button>
         </div>
-        <TradingViewWidget symbol={symbol || "UNKNOWN"} />
+        <TradingViewWidget />
       </div>
-      <div className="trade-table">
+      {/* <div className="trade-table">
         {loading ? (
+          // <div style={{ textAlign: "center", marginTop: "50px" }}>
+          //   <Spin tip="Loading transactions..." />
+          // </div>
           <div className="spinner-container">
             <div className="spinner"></div>
             <p>Loading transactions...</p>
@@ -99,19 +109,21 @@ function TokenVisualization() {
           <div>
             <Table
               columns={columns}
-              data={transactions || []}
+              dataSource={transactions || []}
               rowKey={(record, index) => index} // Use the index as the row key
+              pagination={false}
             />
             <Pagination
               current={page}
               total={total}
               pageSize={5}
               onChange={onPageChange}
-              style={{ justifyContent: "flex-end", marginTop: 5 }}
+              style={{ marginTop: "20px", textAlign: "right" }}
+              showSizeChanger={false}
             />
           </div>
         )}
-      </div>
+      </div> */}
     </div>
   );
 }

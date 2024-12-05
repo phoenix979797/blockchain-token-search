@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Button, Table, Spin } from "antd";
+import axios from "axios";
 
 const WalletStatsModal = ({ walletId, visible, onClose }) => {
   const [stats, setStats] = useState(null);
@@ -10,9 +11,7 @@ const WalletStatsModal = ({ walletId, visible, onClose }) => {
     const fetchWalletStats = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/stats/${walletId}`);
-        if (!response.ok) throw new Error("Failed to fetch wallet stats");
-        const data = await response.json();
+        const { data } = await axios.get(`/api/stats/${walletId}`);
         console.log(data);
         setStats(data);
       } catch (error) {

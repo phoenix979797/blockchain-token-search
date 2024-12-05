@@ -1,8 +1,8 @@
 const express = require("express");
-const { getStatsForWallet } = require("../controller/statsController");
+const { getEthTokens } = require("../controller/ethTokenController");
 const router = express.Router();
 
 // Route to get trading stats for a specific wallet
-router.get("/:walletId", getStatsForWallet);
+router.get("/", getEthTokens);
 
 module.exports = router;

@@ -15,8 +15,10 @@ const {
 const sleep = require("./utils/sleep");
 const { formatTimeAgo } = require("./utils/number");
 const morgan = require("morgan");
-const Token = require("./model/Token");
 const { default: axios } = require("axios");
+const Token = require("./model/Token");
+const ETHToken = require("./model/ETHToken");
+const AutoSearch = require("./model/AutoSearch");
 
 dotenv.config();
 connectDB();
@@ -43,9 +45,7 @@ app.use("/api", routes);
 // Socket.IO events
 io.on("connection", (socket) => {
   console.log("New client connected");
-
   let searchInProgress = false;
-  let autoInProgress = false;
 
   socket.on(
     "startSearch",
@@ -59,12 +59,11 @@ io.on("connection", (socket) => {
 
       searchInProgress = true;
 
-      const fromDate = moment().subtract(daysMax, "days").toISOString();
-      const toDate = moment().subtract(daysMin, "days").toISOString();
-
       try {
         let page = 0;
         while (1) {
+          const fromDate = moment().subtract(daysMax, "days").toISOString();
+          const toDate = moment().subtract(daysMin, "days").toISOString();
           const url = `${process.env.BASE_URL}/v2/pool/ether?sort=creationTime&order=desc&from=${fromDate}&to=${toDate}&page=${page}&pageSize=50`;
           const data = await makeApiCall(url);
           await sleep(process.env.API_RATE_LIMIT);
@@ -73,7 +72,10 @@ io.on("connection", (socket) => {
             throw new Error("Format de réponse API invalide");
           }
 
-          if (!data.data.results.length) break;
+          if (!data.data.results.length) {
+            page = 0;
+            continue;
+          }
 
           for (let i = 0; i < data.data.results.length; i++) {
             if (!searchInProgress) {
@@ -115,9 +117,9 @@ io.on("connection", (socket) => {
                     }
                   );
                   await sleep(process.env.API_RATE_LIMIT);
-                  let transaction_first = null;
+                  let transaction_add = null;
                   if (transfer_first?.data?.result?.transfers[0]?.hash) {
-                    transaction_first = await axios.post(
+                    transaction_add = await axios.post(
                       `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
                       {
                         method: "eth_getTransactionByHash",
@@ -149,9 +151,9 @@ io.on("connection", (socket) => {
                     }
                   );
                   await sleep(process.env.API_RATE_LIMIT);
-                  let transaction_next = null;
+                  let transaction_first = null;
                   if (transfer_next?.data?.result?.transfers[0]?.hash) {
-                    transaction_next = await axios.post(
+                    transaction_first = await axios.post(
                       `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
                       {
                         method: "eth_getTransactionByHash",
@@ -161,6 +163,32 @@ io.on("connection", (socket) => {
                       }
                     );
                     await sleep(process.env.API_RATE_LIMIT);
+                  }
+                  transaction_add = transaction_add?.data?.result;
+                  transaction_first = transaction_first?.data?.result;
+
+                  let add_block_time = null;
+                  if (transaction_add) {
+                    add_block_time = await axios.post(
+                      `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
+                      {
+                        method: "eth_getBlockByNumber",
+                        params: [transaction_add.blockNumber, true],
+                      }
+                    );
+                  }
+
+                  await sleep(process.env.API_RATE_LIMIT);
+
+                  let first_block_time = null;
+                  if (transaction_first) {
+                    first_block_time = await axios.post(
+                      `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
+                      {
+                        method: "eth_getBlockByNumber",
+                        params: [transaction_first.blockNumber, true],
+                      }
+                    );
                   }
 
                   const tokenCard = {
@@ -181,10 +209,52 @@ io.on("connection", (socket) => {
                     ),
                     tokenAddress: pool.mainToken?.address || "N/A",
                     poolAddress: pool.address || "N/A",
-                    firstAddress:
-                      transaction_first?.data?.result?.from || "N/A",
-                    nextAddress: transaction_next?.data?.result?.from || "N/A",
+                    addAddress: transaction_add?.from || "N/A",
+                    firstAddress: transaction_first?.from || "N/A",
                   };
+
+                  const duplication = await Token.find({
+                    name: pool.mainToken.name,
+                    tokenAddress: pool.mainToken?.address,
+                    datetime: moment(pool.creationTime).format(
+                      "DD/MM/YYYY HH\\h mm"
+                    ),
+                  });
+                  if (!duplication) {
+                    const token = new Token({
+                      name: pool.mainToken?.name || "Inconnu",
+                      datetime: moment(pool.creationTime).format(
+                        "DD/MM/YYYY HH\\h mm"
+                      ),
+                      tokenAddress: pool.mainToken?.address || "N/A",
+                      walletAddLiquidity: transaction_add?.from || "N/A",
+                      walletFirstTransaction: transaction_first?.from || "N/A",
+                      nameWalletAddLiquidity: transaction_add
+                        ? `Voleur - ${
+                            pool.mainToken?.name || "Inconnu"
+                          } - ${moment(
+                            add_block_time
+                              ? parseInt(
+                                  add_block_time?.data?.result?.timestamp
+                                ) * 1000
+                              : new Date()
+                          ).format("DD/MM/YYYY HH\\h mm")}`
+                        : "N/A",
+                      nameWalletFirstTransaction: transaction_first
+                        ? `Voleur - ${
+                            pool.mainToken?.name || "Inconnu"
+                          } - ${moment(
+                            first_block_time
+                              ? parseInt(
+                                  first_block_time?.data?.result?.timestamp
+                                ) * 1000
+                              : new Date()
+                          ).format("DD/MM/YYYY HH\\h mm")}`
+                        : "N/A",
+                    });
+                    await token.save();
+                  }
+
                   socket.emit("searchToken", {
                     token: tokenCard,
                     progress: (100 / data.data.results.length) * (i + 1),
@@ -199,7 +269,7 @@ io.on("connection", (socket) => {
 
                 await sleep(process.env.API_RATE_LIMIT);
               } catch (error) {
-                console.log(error);
+                console.log("search socket error");
                 await sleep(process.env.API_RATE_LIMIT);
                 socket.emit("searchToken", {
                   progress: (100 / data.data.results.length) * (i + 1),
@@ -214,8 +284,7 @@ io.on("connection", (socket) => {
         socket.emit("searchComplete");
         console.log("searchComplete");
       } catch (error) {
-        console.error(error);
-        socket.emit("searchError", { message: error.message });
+        console.log("search socket error");
       }
     }
   );
@@ -224,157 +293,52 @@ io.on("connection", (socket) => {
     searchInProgress = false;
   });
 
-  socket.on(
-    "startAuto",
-    async ({ daysMax, daysMin, liquidityMax, liquidityMin }) => {
-      console.log("Auto started:", {
-        daysMax,
-        daysMin,
-        liquidityMax,
-        liquidityMin,
-      });
-
-      autoInProgress = true;
-
-      const fromDate = moment().subtract(daysMax, "days").toISOString();
-      const toDate = moment().subtract(daysMin, "days").toISOString();
-
+  socket.on("newToken", async () => {
+    while (1) {
       try {
-        while (1) {
-          if (!autoInProgress) {
-            return;
-          }
-          const url = `${process.env.BASE_URL}/v2/pool/ether?sort=creationTime&order=desc&from=${fromDate}&to=${toDate}&page=0&pageSize=50`;
-          const data = await makeApiCall(url);
+        const response = await makeApiCall(
+          `https://public-api.dextools.io/trial/v2/token/ether/?sort=creationTime&order=asc&from=${moment(
+            new Date(Number(new Date()) - 3 * 24 * 60 * 60 * 1000)
+          ).format("YYYY-MM-DD hh:mm:ss")}&to=${moment().format(
+            "YYYY-MM-DD hh:mm:ss"
+          )}`
+        );
+        const tokens = response?.data?.tokens;
 
-          await sleep(process.env.API_RATE_LIMIT);
-
-          if (!data.data || !data.data.results) {
-            throw new Error("Format de réponse API invalide");
-          }
-
-          for (let i = 0; i < data.data.results.length; i++) {
-            if (!autoInProgress) {
-              return;
-            }
-            const pool = data.data.results[i];
-
-            if (pool && pool.address) {
-              try {
-                const liquidity = await getLiquidity(pool.address);
-                const holders = await getTokenHolders(
-                  "ether",
-                  pool.mainToken?.address
-                );
-
-                if (
-                  Number(liquidity) <= liquidityMax &&
-                  Number(liquidity) >= liquidityMin
-                ) {
-                  const transfer_first = await axios.post(
-                    `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
-                    {
-                      method: "alchemy_getAssetTransfers",
-                      params: {
-                        toAddress: pool.address,
-                        category: [
-                          "external",
-                          "internal",
-                          "erc20",
-                          "erc721",
-                          "erc1155",
-                          "specialnft",
-                        ],
-                        maxCount: "0x1",
-                        order: "asc",
-                      },
-                    }
-                  );
-
-                  const transfer_next = await axios.post(
-                    `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
-                    {
-                      method: "alchemy_getAssetTransfers",
-                      params: {
-                        fromAddress: pool.address,
-                        category: [
-                          "external",
-                          "internal",
-                          "erc20",
-                          "erc721",
-                          "erc1155",
-                          "specialnft",
-                        ],
-                        maxCount: "0x1",
-                        order: "asc",
-                      },
-                    }
-                  );
-
-                  const transaction = await axios.post(
-                    `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
-                    {
-                      method: "eth_getTransactionByHash",
-                      params: [transfer_next?.data?.result?.transfers[0]?.hash],
-                    }
-                  );
-
-                  const tokenCard = {
-                    holders: holders !== null ? holders.toLocaleString() : "",
-                    time: formatTimeAgo(pool.creationTime),
-                    name: `${pool.mainToken?.name || "Inconnu"} (${
-                      pool.mainToken?.symbol || "Inconnu"
-                    })`,
-                    dextoolsUrl: `https://www.dextools.io/app/en/ether/pair-explorer/${pool.address}`,
-                    liquidity: liquidity,
-                    exchange: pool.exchangeName || "N/A",
-                    pair:
-                      (pool.mainToken?.symbol || "Inconnu") +
-                      " / " +
-                      (pool.sideToken?.symbol || "Inconnu"),
-                    creationDate: moment(pool.creationTime).format(
-                      "DD/MM/YYYY HH:mm:ss"
-                    ),
-                    tokenAddress: pool.mainToken?.address || "N/A",
-                    poolAddress: pool.address || "N/A",
-                    firstAddress:
-                      transfer_first?.data?.result?.transfers[0]?.from || "N/A",
-                    nextAddress: transaction?.data?.result?.from || "N/A",
-                  };
-                  const token = new Token({
-                    name: tokenCard.name,
-                    date: tokenCard.creationDate,
-                    tokenAddress: tokenCard.tokenAddress,
-                    poolAddress: tokenCard.poolAddress,
-                    firstAddress: tokenCard.firstAddress,
-                    nextAddress: tokenCard.nextAddress,
-                    dextoolsUrl: tokenCard.dextoolsUrl,
-                    status: "V",
-                  });
-                  await token.save();
-                  socket.emit("searchToken", tokenCard);
-                }
-
-                await sleep(process.env.API_RATE_LIMIT);
-              } catch (error) {
-                console.log(error);
-                await sleep(process.env.API_RATE_LIMIT);
-                continue;
-              }
-            }
+        for (let i = 0; i < tokens.length; i++) {
+          const existingToken = await ETHToken.findOne({
+            name: tokens[i].name,
+            symbol: tokens[i].symbol,
+          });
+          if (!existingToken) {
+            const liquidity = await getLiquidity(tokens[i].address);
+            await sleep(process.env.API_RATE_LIMIT);
+            const holders = await getTokenHolders("ether", tokens[i].address);
+            await sleep(process.env.API_RATE_LIMIT);
+            const newETHToken = new ETHToken({
+              name: tokens[i].name,
+              symbol: tokens[i].symbol,
+              address: tokens[i].address,
+              date: new Date(tokens[i].creationTime).toISOString(),
+              liquidity,
+              holders,
+            });
+            await newETHToken.save();
+            socket.emit("newToken", {
+              name: tokens[i].name,
+              symbol: tokens[i].symbol,
+              address: tokens[i].address,
+              date: new Date(tokens[i].creationTime).toISOString(),
+              liquidity,
+              holders,
+            });
           }
         }
-        socket.emit("searchComplete");
-        console.log("searchComplete");
-      } catch (error) {
-        console.error(error);
-        socket.emit("searchError", { message: error.message });
+      } catch (e) {
+        console.log("new token error");
       }
+      await sleep(30000);
     }
-  );
-
-  socket.on("stopAuto", () => {
-    autoInProgress = false;
   });
 
   socket.on("disconnect", () => {
@@ -384,3 +348,197 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+(async () => {
+  while (1) {
+    const autoInProgress = await AutoSearch.findOne();
+    if (!autoInProgress?.isProgress) {
+      await sleep(5000);
+      continue;
+    }
+
+    try {
+      let page = 0;
+      while (1) {
+        const autoInProgress = await AutoSearch.findOne();
+        if (!autoInProgress?.isProgress) {
+          break;
+        }
+        const { daysMax, daysMin } = autoInProgress;
+        const fromDate = moment().subtract(daysMax, "days").toISOString();
+        const toDate = moment().subtract(daysMin, "days").toISOString();
+        const url = `${process.env.BASE_URL}/v2/pool/ether?sort=creationTime&order=desc&from=${fromDate}&to=${toDate}&page=${page}&pageSize=50`;
+        const data = await makeApiCall(url);
+        await sleep(process.env.API_RATE_LIMIT);
+
+        if (!data.data || !data.data.results) {
+          throw new Error("Format de réponse API invalide");
+        }
+
+        if (!data.data.results.length) {
+          page = 0;
+          continue;
+        }
+
+        for (let i = 0; i < data.data.results.length; i++) {
+          const autoInProgress = await AutoSearch.findOne();
+          if (!autoInProgress?.isProgress) {
+            break;
+          }
+          const { liquidityMax, liquidityMin } = autoInProgress;
+          const pool = data.data.results[i];
+
+          if (pool && pool.address) {
+            const duplication = await Token.findOne({
+              name: pool.mainToken.name,
+              tokenAddress: pool.mainToken?.address,
+              datetime: moment(pool.creationTime).format("DD/MM/YYYY HH\\h mm"),
+            });
+            if (duplication) continue;
+
+            try {
+              const liquidity = await getLiquidity(pool.address);
+              await sleep(process.env.API_RATE_LIMIT);
+
+              if (
+                Number(liquidity) <= liquidityMax &&
+                Number(liquidity) >= liquidityMin
+              ) {
+                let transfer_first = await axios.post(
+                  `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
+                  {
+                    method: "alchemy_getAssetTransfers",
+                    params: {
+                      toAddress: pool.address,
+                      category: [
+                        "external",
+                        "internal",
+                        "erc20",
+                        "erc721",
+                        "erc1155",
+                        "specialnft",
+                      ],
+                      maxCount: "0x2",
+                      order: "asc",
+                    },
+                  }
+                );
+                await sleep(process.env.API_RATE_LIMIT);
+                let transaction_add = null;
+                if (transfer_first?.data?.result?.transfers[0]?.hash) {
+                  transaction_add = await axios.post(
+                    `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
+                    {
+                      method: "eth_getTransactionByHash",
+                      params: [
+                        transfer_first?.data?.result?.transfers[0]?.hash,
+                      ],
+                    }
+                  );
+                  await sleep(process.env.API_RATE_LIMIT);
+                }
+
+                const transfer_next = await axios.post(
+                  `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
+                  {
+                    method: "alchemy_getAssetTransfers",
+                    params: {
+                      fromAddress: pool.address,
+                      category: [
+                        "external",
+                        "internal",
+                        "erc20",
+                        "erc721",
+                        "erc1155",
+                        "specialnft",
+                      ],
+                      maxCount: "0x2",
+                      order: "asc",
+                    },
+                  }
+                );
+                await sleep(process.env.API_RATE_LIMIT);
+                let transaction_first = null;
+                if (transfer_next?.data?.result?.transfers[0]?.hash) {
+                  transaction_first = await axios.post(
+                    `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
+                    {
+                      method: "eth_getTransactionByHash",
+                      params: [transfer_next?.data?.result?.transfers[0]?.hash],
+                    }
+                  );
+                  await sleep(process.env.API_RATE_LIMIT);
+                }
+                transaction_add = transaction_add?.data?.result;
+                transaction_first = transaction_first?.data?.result;
+
+                let add_block_time = null;
+                if (transaction_add) {
+                  add_block_time = await axios.post(
+                    `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
+                    {
+                      method: "eth_getBlockByNumber",
+                      params: [transaction_add.blockNumber, true],
+                    }
+                  );
+                }
+
+                await sleep(process.env.API_RATE_LIMIT);
+
+                let first_block_time = null;
+                if (transaction_first) {
+                  first_block_time = await axios.post(
+                    `https://eth-mainnet.g.alchemy.com/v2/${process.env.AlCHEMY_KEY}`,
+                    {
+                      method: "eth_getBlockByNumber",
+                      params: [transaction_first.blockNumber, true],
+                    }
+                  );
+                }
+
+                const token = new Token({
+                  name: pool.mainToken?.name || "Inconnu",
+                  datetime: moment(pool.creationTime).format(
+                    "DD/MM/YYYY HH\\h mm"
+                  ),
+                  tokenAddress: pool.mainToken?.address || "N/A",
+                  walletAddLiquidity: transaction_add?.from || "N/A",
+                  walletFirstTransaction: transaction_first?.from || "N/A",
+                  nameWalletAddLiquidity: transaction_add
+                    ? `Voleur - ${pool.mainToken?.name || "Inconnu"} - ${moment(
+                        add_block_time
+                          ? parseInt(add_block_time?.data?.result?.timestamp) *
+                              1000
+                          : new Date()
+                      ).format("DD/MM/YYYY HH\\h mm")}`
+                    : "N/A",
+                  nameWalletFirstTransaction: transaction_first
+                    ? `Voleur - ${pool.mainToken?.name || "Inconnu"} - ${moment(
+                        first_block_time
+                          ? parseInt(
+                              first_block_time?.data?.result?.timestamp
+                            ) * 1000
+                          : new Date()
+                      ).format("DD/MM/YYYY HH\\h mm")}`
+                    : "N/A",
+                });
+                await token.save();
+              }
+
+              await sleep(process.env.API_RATE_LIMIT);
+            } catch (error) {
+              console.log("auto search error");
+              await sleep(process.env.API_RATE_LIMIT);
+              continue;
+            }
+          }
+
+          await sleep(process.env.API_RATE_LIMIT);
+        }
+        page++;
+      }
+    } catch (error) {
+      console.log("auto search error", error);
+    }
+  }
+})();

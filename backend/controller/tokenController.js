@@ -9,34 +9,6 @@ exports.tokenList = async (req, res) => {
   }
 };
 
-exports.addToken = async (req, res) => {
-  const {
-    name,
-    creationDate,
-    tokenAddress,
-    poolAddress,
-    firstAddress,
-    nextAddress,
-    dextoolsUrl,
-  } = req.body;
-  try {
-    const token = new Token({
-      name,
-      date: creationDate,
-      tokenAddress,
-      poolAddress,
-      firstAddress,
-      nextAddress,
-      dextoolsUrl,
-      status: "SN",
-    });
-    const savedToken = await token.save();
-    res.status(201).json(savedToken);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-};
-
 exports.updateToken = async (req, res) => {
   const { _id } = req.params;
   const { name } = req.body;

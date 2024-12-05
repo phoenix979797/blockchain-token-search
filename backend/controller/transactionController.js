@@ -6,7 +6,7 @@ const fetchTokenPrice = async (symbol, timestamp) => {
   const formattedDate = `${date.getDate()}-${
     date.getMonth() + 1
   }-${date.getFullYear()}`; // Format date as DD-MM-YYYY
-  console.log(formattedDate);
+
   try {
     const response = await axios.get(
       `https://api.coingecko.com/api/v3/coins/${symbol}/history?date=${formattedDate}`
@@ -44,18 +44,11 @@ exports.transactions = async (req, res) => {
       i++
     ) {
       let price = "N / A";
-      for (let j = 0; j < 3; j++) {
-        const result = await fetchTokenPrice(
-          "ethereum",
-          transactions[i].timeStamp
-        );
-        if (result) {
-          price = result;
-          break;
-        } else {
-          await sleep(5000);
-        }
-      }
+      const priceTmp = await fetchTokenPrice(
+        "ethereum",
+        transactions[i].timeStamp
+      );
+      if (priceTmp) price = priceTmp;
       result.push({
         date: new Date(transactions[i].timeStamp * 1000),
         type:

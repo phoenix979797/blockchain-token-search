@@ -1,38 +1,4 @@
 @import "./tokensearch.scss";
 @import "./tokenvisualization.scss";
 @import "./wallet.scss";
-
-body {
-  font-family: Arial, sans-serif;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-  background-color: #f5f5f5;
-}
-
-.ReactModal__Overlay {
-  background-color: rgba(0, 0, 0, 0.5) !important;
-}
-
-.ReactModal__Content {
-  max-width: 500px;
-  margin: auto;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-}
-
-.Toastify__toast {
-  font-family: Arial, sans-serif;
-  border-radius: 8px;
-}
-
-.Toastify__toast--success {
-  background-color: #4caf50;
-  color: white;
-}
-
-.Toastify__toast--error {
-  background-color: #f44336;
-  color: white;
-}
+@import "./newproject.scss";

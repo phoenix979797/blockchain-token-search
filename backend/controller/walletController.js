@@ -3,6 +3,7 @@ const { sendTelegramMessage } = require("../utils/telegram");
 const Wallet = require("../model/Wallet");
 const Transaction = require("../model/Transaction");
 const ethers = require("ethers");
+const { makeApiCall } = require("../utils/apiUtils");
 
 // Get all wallets
 const getAllWallets = async (req, res) => {
@@ -52,29 +53,21 @@ const removeWallet = async (req, res) => {
       .status(200)
       .json({ message: "Wallet removed successfully", walletId });
   } catch (error) {
-    console.error("Error removing wallet:", error);
+    console.error("Error removing wallet:");
     return res.status(500).json({ error: "Failed to remove wallet" });
   }
 };
 
 const getTokenSymbol = async (tokenAddress) => {
   try {
-    const response = await fetch(
-      `https://api.etherscan.io/api?module=token&action=tokeninfo&contractaddress=${tokenAddress}&apikey=${process.env.ETHERSCAN_API_KEY}`
+    const response = await makeApiCall(
+      `https://public-api.dextools.io/trial/v2/token/ether/${tokenAddress}`
     );
-    const data = await response.json();
+    const { data } = await response;
 
-    if (data.status === "1" && data.result.length > 0) {
-      return data.result[0].symbol || "UNKNOWN";
-    } else {
-      console.error("Etherscan API error:", data.message);
-      return "UNKNOWN";
-    }
+    return data?.symbol || "UNKNOWN";
   } catch (error) {
-    console.error(
-      `Failed to fetch token symbol for address: ${tokenAddress}`,
-      error
-    );
+    console.error(`Failed to fetch token symbol for address: ${tokenAddress}`);
     return "UNKNOWN";
   }
 };
@@ -108,7 +101,7 @@ const checkTransactions = async () => {
             await sendTelegramMessage(
               `🚨 PURCHASE ⬆️ - Wallet: ${wallet.walletName}\nDate: ${tx.timeStamp}\nToken: ${tokenSymbol}\nTransaction: https://etherscan.io/tx/${tx.hash}`
             );
-          } else if (tx.from === wallet.walletAddress) {
+          } else {
             // If the wallet is the sender, it's a sell
             type = "sell";
             await sendTelegramMessage(
@@ -133,7 +126,7 @@ const checkTransactions = async () => {
       }
     }
   } catch (error) {
-    console.error("Error checking transactions:", error);
+    console.error("Error checking transactions:");
   }
 };
 

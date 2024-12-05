@@ -52,14 +52,10 @@ const WalletTable = () => {
 
   const handleRemoveWallet = async (walletId) => {
     try {
-      const response = await fetch(`/api/wallets/${walletId}`, {
+      const result = await fetch(`/api/wallets/${walletId}`, {
         method: "DELETE",
       });
-      if (!response.ok) {
-        throw new Error("Failed to remove wallet");
-      }
-      const result = await response.json();
-      message.success(result.message);
+      message.success(result?.message || "");
       fetchWallets(); // Refresh wallet list after removal
     } catch (error) {
       console.error("Error removing wallet:", error);

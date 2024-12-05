@@ -7,8 +7,8 @@ const WalletRegisterModal = ({ visible, onOk, onClose }) => {
 
   const handleSave = async (values) => {
     try {
-      const response = await axios.post("/api/wallets", values);
-      message.success(response.message);
+      await axios.post("/api/wallets", values);
+      message.success("Register successful!");
       form.resetFields();
       onOk();
     } catch (error) {

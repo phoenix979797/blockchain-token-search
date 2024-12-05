@@ -7,9 +7,8 @@ import {
 import moment from "moment";
 import { io } from "socket.io-client";
 import axios from "axios";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import TokenModal from "./BDDModal";
+import BDDModal from "./BDDModal";
+import { Button, message, Alert } from "antd";
 
 // Configuration de moment.js en français
 moment.locale("fr");
@@ -48,6 +47,15 @@ const TokenSearch = () => {
       console.error("Search error:", error);
     });
 
+    (async () => {
+      const { data } = await axios.get("/api/search");
+      setLiquidityMin(data?.liquidityMin || 0);
+      setLiquidityMax(data?.liquidityMax || 10);
+      setDaysMin(data?.daysMin || 0);
+      setDaysMax(data?.daysMax || 7);
+      setAutoInProgress(!!data?.isProgress);
+    })();
+
     return () => {
       socketConnection.disconnect();
     };
@@ -72,44 +80,21 @@ const TokenSearch = () => {
     setSearchInProgress(false);
   };
 
-  const hideToken = (index) => {
-    const tmp = [...tokens];
-    tmp.splice(index, 1);
-    setTokens(tmp);
-  };
-
-  const addToken = async (index) => {
-    try {
-      await axios.post("/api/token", tokens[index]);
-
-      // Show a success notification
-      toast.success(`Token has been added successfully!`);
-    } catch (error) {
-      // Show an error notification
-      toast.error("Error saving token. Please try again.");
-    }
-  };
-
   const accessBdd = async () => {
     const { data } = await axios.get("/api/token");
     setBddTokens(data);
     setIsModalOpen(true);
   };
 
-  const addAutomation = () => {
-    if (!socket) return;
-    if (autoInProgress) {
-      setAutoInProgress(false);
-      socket.emit("stopAuto");
-    } else {
-      setAutoInProgress(true);
-      socket.emit("startAuto", {
-        daysMin,
-        daysMax,
-        liquidityMin,
-        liquidityMax,
-      });
-    }
+  const handleAutomation = async () => {
+    await axios.post("/api/search", {
+      daysMin,
+      daysMax,
+      liquidityMin,
+      liquidityMax,
+      isProgress: !autoInProgress,
+    });
+    setAutoInProgress(!autoInProgress);
   };
 
   const handleRename = async (token) => {
@@ -123,11 +108,10 @@ const TokenSearch = () => {
           )
         );
 
-        // Show a success notification
-        toast.success(`Token name has been changed successfully!`);
+        message.success("Token name has been changed successfully!");
       } catch (error) {
         // Show an error notification
-        toast.error("Error saving token. Please try again.");
+        message.error("Error saving token. Please try again.");
       }
     }
   };
@@ -141,10 +125,10 @@ const TokenSearch = () => {
         );
 
         // Show a success notification
-        toast.success(`Token has been deleted successfully!`);
+        message.success(`Token has been deleted successfully!`);
       } catch (error) {
         // Show an error notification
-        toast.error("Error deleting token. Please try again.");
+        message.error("Error deleting token. Please try again.");
       }
     }
   };
@@ -159,30 +143,38 @@ const TokenSearch = () => {
             alignItems: "center",
           }}
         >
-          <h1>Token Search</h1>
+          <h1>Token Search </h1>
+          <p>{autoInProgress && "(Auto Search Processing...)"}</p>
           <div>
-            <button
+            <Button
+              type="primary"
               style={{ height: "100%", marginRight: 5 }}
-              onClick={addAutomation}
+              onClick={handleAutomation}
             >
               {autoInProgress ? "Stop" : "Start"} Automation
-            </button>
-            <button style={{ height: "100%" }} onClick={accessBdd}>
+            </Button>
+            <Button
+              type="primary"
+              style={{ height: "100%" }}
+              onClick={accessBdd}
+            >
               Access BDD
-            </button>
+            </Button>
           </div>
         </div>
 
-        <div className="api-info">
-          Note: Due to API limitations (1 call/second), searching may take some
-          time.
-        </div>
+        <Alert
+          message="Note: Due to API limitations (1 call/second), searching may take some time."
+          type="info"
+          showIcon
+        />
 
         <div
           style={{
             display: "flex",
             justifyContent: "space-evenly",
             flexWrap: "wrap",
+            marginTop: 10,
           }}
         >
           <div className="input-group">
@@ -236,7 +228,7 @@ const TokenSearch = () => {
         </div>
         <div className="button-group">
           <button onClick={startSearch} disabled={searchInProgress}>
-            To research
+            Start Search
           </button>
           <button
             onClick={stopSearch}
@@ -249,14 +241,8 @@ const TokenSearch = () => {
 
       <div className="results">
         {tokens.map((token, index) => (
-          <div className="token-card" key={token.name}>
+          <div className="token-card" key={token.name + index}>
             <div className="time-badge">{token.time}</div>
-            <div className="operation">
-              <button onClick={() => hideToken(index)}>Hide</button>
-              <button onClick={() => addToken(index)}>
-                {token?.bdd ? "Remove BDD" : "Add BDD"}
-              </button>
-            </div>
             <div className="token-header">
               <h3 className="token-name">
                 {token.name}
@@ -313,11 +299,11 @@ const TokenSearch = () => {
             <div className="token-info" style={{ marginTop: 15 }}>
               <div className="info-item">
                 <div className="info-label">Add Address</div>
-                <div className="info-value address">{token.firstAddress}</div>
+                <div className="info-value address">{token.addAddress}</div>
               </div>
               <div className="info-item">
-                <div className="info-label">Next Address</div>
-                <div className="info-value address">{token.nextAddress}</div>
+                <div className="info-label">First Address</div>
+                <div className="info-value address">{token.firstAddress}</div>
               </div>
             </div>
           </div>
@@ -336,16 +322,13 @@ const TokenSearch = () => {
           <></>
         )}
       </div>
-      {isModalOpen && (
-        <TokenModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          tokens={bddTokens}
-          onRename={handleRename}
-          onRemove={handleRemove}
-        />
-      )}
-      <ToastContainer />
+      <BDDModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        tokens={bddTokens}
+        onRename={handleRename}
+        onRemove={handleRemove}
+      />
     </div>
   );
 };
