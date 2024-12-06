@@ -1,9 +1,19 @@
 const AutoSearch = require("../model/AutoSearch");
+const Token = require("../model/Token");
 
 exports.getAutoSearchStatus = async (req, res) => {
   try {
     const data = await AutoSearch.findOne();
-    res.status(200).json(data);
+    let tokens = await Token.find().sort({ datetime: -1 });
+    res.status(200).json({
+      liquidityMin: data?.liquidityMin,
+      liquidityMax: data?.liquidityMax,
+      daysMin: data?.daysMin,
+      daysMax: data?.daysMax,
+      isProgress: data?.isProgress,
+      tokenCount: tokens?.length,
+      tokenList: tokens.splice(0, 75),
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

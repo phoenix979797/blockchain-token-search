@@ -5,9 +5,7 @@ import TradingViewWidget from "./TradingViewWidget";
 import { Table, Pagination, Spin } from "antd";
 
 function TokenVisualization() {
-  const [tokenAddress, setTokenAddress] = useState(
-    "0x58c7cc591cb842a362e45345259932c3fcc96af4"
-  );
+  const [tokenAddress, setTokenAddress] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [symbol, setSymbol] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -94,7 +92,7 @@ function TokenVisualization() {
             Fetch Transactions
           </button>
         </div>
-        <TradingViewWidget />
+        <TradingViewWidget symbol={symbol} />
       </div>
       {/* <div className="trade-table">
         {loading ? (

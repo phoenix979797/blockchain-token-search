@@ -1,43 +1,29 @@
 import React, { useEffect } from "react";
 
-function TradingViewWidget({ symbol = "WAGDU" }) {
+function TradingViewWidget({ symbol }) {
   useEffect(() => {
+    const symbolMapping = {
+      WALDU: "WALDU_SHORT_VOLUME",
+      // Add more mappings as needed
+    };
+
     const initializeWidget = () => {
       if (window.TradingView) {
-        try {
-          new window.TradingView.widget({
-            symbol: symbol,
-            container_id: "tradingview_widget",
-            width: "100%",
-            height: 500,
-            theme: "light",
-            style: "1",
-            locale: "en",
-            interval: "D",
-            timezone: "Etc/UTC",
-            withdateranges: true,
-            hide_side_toolbar: false,
-            allow_symbol_change: true,
-          });
-        } catch (error) {
-          console.error(
-            `Symbol "${symbol}" not found. Falling back to "ETHUSD".`
-          );
-          new window.TradingView.widget({
-            symbol: symbol + "_SHORT_VOLUME", // Fallback symbol
-            container_id: "tradingview_widget",
-            width: "100%",
-            height: 500,
-            theme: "light",
-            style: "1",
-            locale: "en",
-            interval: "D",
-            timezone: "Etc/UTC",
-            withdateranges: true,
-            hide_side_toolbar: false,
-            allow_symbol_change: true,
-          });
-        }
+        new window.TradingView.widget({
+          symbol: symbolMapping[symbol] || symbol,
+          container_id: "tradingview_widget",
+          width: "100%",
+          height: 500,
+          theme: "light",
+          style: "1",
+          locale: "en",
+          interval: "W",
+          timezone: "Etc/UTC",
+          withdateranges: true,
+          hide_side_toolbar: false,
+          allow_symbol_change: true,
+          exchange: "DEXTools.io",
+        });
       }
     };
 

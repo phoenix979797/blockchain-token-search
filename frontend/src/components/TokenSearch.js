@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import {
   formatNumber,
   getLiquidityClassName,
@@ -7,44 +8,29 @@ import {
 import moment from "moment";
 import { io } from "socket.io-client";
 import axios from "axios";
-import BDDModal from "./BDDModal";
-import { Button, message, Alert } from "antd";
+import { Button, Alert } from "antd";
 
 // Configuration de moment.js en français
 moment.locale("fr");
 
 const TokenSearch = () => {
+  const navigate = useNavigate();
   const [daysMin, setDaysMin] = useState(0);
   const [daysMax, setDaysMax] = useState(7);
   const [liquidityMin, setLiquidityMin] = useState(0);
   const [liquidityMax, setLiquidityMax] = useState(10);
   const [tokens, setTokens] = useState([]);
-  const [searchInProgress, setSearchInProgress] = useState(false);
   const [autoInProgress, setAutoInProgress] = useState(false);
-  const [socket, setSocket] = useState(null);
-  const [bddTokens, setBddTokens] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [attempt, setAttempt] = useState(0);
+  const [tokenCount, setTokenCount] = useState(0);
 
   useEffect(() => {
     const socketConnection = io(process.env.SOCKET_URL);
-    setSocket(socketConnection);
 
-    socketConnection.on("searchToken", (token) => {
-      if (token.token) setTokens((prevTokens) => [...prevTokens, token.token]);
-      setProgress(token.progress);
-      setAttempt(token.page);
-    });
-
-    socketConnection.on("searchComplete", () => {
-      setSearchInProgress(false);
-      console.log("Search complete");
-    });
-
-    socketConnection.on("searchError", (error) => {
-      setSearchInProgress(false);
-      console.error("Search error:", error);
+    socketConnection.on("token", ({ tokenCard, tokenCount }) => {
+      if (tokenCard) {
+        setTokens((prevTokens) => [...prevTokens, tokenCard]);
+      }
+      setTokenCount(tokenCount || 0);
     });
 
     (async () => {
@@ -53,38 +39,15 @@ const TokenSearch = () => {
       setLiquidityMax(data?.liquidityMax || 10);
       setDaysMin(data?.daysMin || 0);
       setDaysMax(data?.daysMax || 7);
+      setTokenCount(data?.tokenCount || 0);
       setAutoInProgress(!!data?.isProgress);
+      setTokens(data?.tokenList?.map((t) => t.tokenCard) || []);
     })();
 
     return () => {
       socketConnection.disconnect();
     };
   }, []);
-
-  const startSearch = () => {
-    if (!socket) return;
-    setTokens([]);
-    setSearchInProgress(true);
-    socket.emit("startSearch", {
-      daysMin,
-      daysMax,
-      liquidityMin,
-      liquidityMax,
-    });
-    setProgress(0);
-    setAttempt(0);
-  };
-
-  const stopSearch = () => {
-    socket.emit("stopSearch");
-    setSearchInProgress(false);
-  };
-
-  const accessBdd = async () => {
-    const { data } = await axios.get("/api/token");
-    setBddTokens(data);
-    setIsModalOpen(true);
-  };
 
   const handleAutomation = async () => {
     await axios.post("/api/search", {
@@ -95,42 +58,6 @@ const TokenSearch = () => {
       isProgress: !autoInProgress,
     });
     setAutoInProgress(!autoInProgress);
-  };
-
-  const handleRename = async (token) => {
-    const newName = prompt("Enter a new name for the token:", token.name);
-    if (newName) {
-      try {
-        await axios.put(`/api/token/${token._id}`, { name: newName });
-        setBddTokens((prevTokens) =>
-          prevTokens.map((t) =>
-            t._id === token._id ? { ...t, name: newName } : t
-          )
-        );
-
-        message.success("Token name has been changed successfully!");
-      } catch (error) {
-        // Show an error notification
-        message.error("Error saving token. Please try again.");
-      }
-    }
-  };
-
-  const handleRemove = async (token) => {
-    if (window.confirm(`Are you sure you want to delete ${token.name}?`)) {
-      try {
-        await axios.delete(`/api/token/${token._id}`);
-        setBddTokens((prevTokens) =>
-          prevTokens.filter((t) => t._id !== token._id)
-        );
-
-        // Show a success notification
-        message.success(`Token has been deleted successfully!`);
-      } catch (error) {
-        // Show an error notification
-        message.error("Error deleting token. Please try again.");
-      }
-    }
   };
 
   return (
@@ -144,7 +71,6 @@ const TokenSearch = () => {
           }}
         >
           <h1>Token Search </h1>
-          <p>{autoInProgress && "(Auto Search Processing...)"}</p>
           <div>
             <Button
               type="primary"
@@ -156,7 +82,7 @@ const TokenSearch = () => {
             <Button
               type="primary"
               style={{ height: "100%" }}
-              onClick={accessBdd}
+              onClick={() => navigate("/bdd")}
             >
               Access BDD
             </Button>
@@ -225,17 +151,6 @@ const TokenSearch = () => {
               onChange={(e) => setLiquidityMax(e.target.value)}
             />
           </div>
-        </div>
-        <div className="button-group">
-          <button onClick={startSearch} disabled={searchInProgress}>
-            Start Search
-          </button>
-          <button
-            onClick={stopSearch}
-            style={{ display: searchInProgress ? "inline-block" : "none" }}
-          >
-            Stop
-          </button>
         </div>
       </div>
 
@@ -308,27 +223,18 @@ const TokenSearch = () => {
             </div>
           </div>
         ))}
-        {searchInProgress ? (
+        {autoInProgress ? (
           <div className="token-card">
             <div className="spinner-container">
               <div className="spinner"></div>
               <p>Searching Tokens...</p>
-              <p>
-                Attempt {attempt + 1} - {progress}%
-              </p>
+              <p>({tokenCount} Tokens are searched already)</p>
             </div>
           </div>
         ) : (
           <></>
         )}
       </div>
-      <BDDModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        tokens={bddTokens}
-        onRename={handleRename}
-        onRemove={handleRemove}
-      />
     </div>
   );
 };
