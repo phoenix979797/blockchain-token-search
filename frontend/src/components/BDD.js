@@ -226,7 +226,7 @@ const BDD = () => {
       key: "tokenAddress",
     },
     {
-      title: "Add Wallet",
+      title: "Add wallet or a list of wallets",
       dataIndex: "addWallet",
       key: "addWallet",
       editable: true,
@@ -362,12 +362,12 @@ const BDD = () => {
           </Form.Item>
 
           <Form.Item
-            label="Add Wallet"
+            label="Add wallet or a list of wallets"
             name="addWallet"
             rules={[
               {
                 required: true,
-                message: "Please input Add Wallet!",
+                message: "Please input Add wallet or a list of wallets!",
               },
             ]}
           >
