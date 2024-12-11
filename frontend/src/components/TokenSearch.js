@@ -7,7 +7,7 @@ import {
 } from "../utils/number";
 import moment from "moment";
 import { io } from "socket.io-client";
-import axios from "axios";
+import axiosInstance from "../utils/axiosInstance";
 import { Button, Alert } from "antd";
 
 // Configuration de moment.js en français
@@ -24,7 +24,7 @@ const TokenSearch = () => {
   const [tokenCount, setTokenCount] = useState(0);
 
   useEffect(() => {
-    const socketConnection = io(process.env.SOCKET_URL);
+    const socketConnection = io("http://localhost:5000");
 
     socketConnection.on("token", ({ tokenCard, tokenCount }) => {
       if (tokenCard) {
@@ -34,7 +34,7 @@ const TokenSearch = () => {
     });
 
     (async () => {
-      const { data } = await axios.get("/api/search");
+      const { data } = await axiosInstance.get("/api/search");
       setLiquidityMin(data?.liquidityMin || 0);
       setLiquidityMax(data?.liquidityMax || 10);
       setDaysMin(data?.daysMin || 0);
@@ -50,7 +50,7 @@ const TokenSearch = () => {
   }, []);
 
   const handleAutomation = async () => {
-    await axios.post("/api/search", {
+    await axiosInstance.post("/api/search", {
       daysMin,
       daysMax,
       liquidityMin,

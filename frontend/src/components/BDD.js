@@ -10,7 +10,7 @@ import {
   Modal,
   Space,
 } from "antd";
-import axios from "axios";
+import axiosInstance from "../utils/axiosInstance";
 import moment from "moment";
 import * as XLSX from "xlsx";
 
@@ -111,7 +111,7 @@ const BDD = () => {
 
   useEffect(() => {
     (async () => {
-      const { data } = await axios.get("/api/token", {
+      const { data } = await axiosInstance.get("/api/token", {
         params: { pageNum, pageSize },
       });
       setTokens(data.list);
@@ -123,8 +123,8 @@ const BDD = () => {
 
   const handleRemove = async (token) => {
     try {
-      await axios.delete(`/api/token/${token._id}`);
-      const { data } = await axios.get("/api/token", {
+      await axiosInstance.delete(`/api/token/${token._id}`);
+      const { data } = await axiosInstance.get("/api/token", {
         params: { pageNum, pageSize },
       });
       setTokens(data.list);
@@ -140,8 +140,8 @@ const BDD = () => {
 
   const handleAdd = async (values) => {
     try {
-      await axios.post("/api/token/", values);
-      const { data } = await axios.get("/api/token", {
+      await axiosInstance.post("/api/token/", values);
+      const { data } = await axiosInstance.get("/api/token", {
         params: { pageNum, pageSize },
       });
       setTokens(data.list);
@@ -159,8 +159,8 @@ const BDD = () => {
 
   const handleSave = async (row) => {
     try {
-      await axios.put(`/api/token/${row._id}`, row);
-      const { data } = await axios.get("/api/token", {
+      await axiosInstance.put(`/api/token/${row._id}`, row);
+      const { data } = await axiosInstance.get("/api/token", {
         params: { pageNum, pageSize },
       });
       setTokens(data.list);
@@ -177,7 +177,7 @@ const BDD = () => {
 
   const handleClear = async () => {
     try {
-      await axios.delete("/api/token/all");
+      await axiosInstance.delete("/api/token/all");
       setTokens([]);
       setTotal(0);
       setThieves(0);
@@ -191,7 +191,7 @@ const BDD = () => {
   };
 
   const handleExportToExcel = async () => {
-    const { data } = await axios.get("/api/token/all");
+    const { data } = await axiosInstance.get("/api/token/all");
     // Create a new workbook
     const wb = XLSX.utils.book_new();
 

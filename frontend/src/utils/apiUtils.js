@@ -1,10 +1,10 @@
-const axios = require("axios");
+import axiosInstance from "./axiosInstance";
 
 const makeApiCall = async (url) => {
   try {
     const proxyUrl = url;
 
-    const response = await axios(proxyUrl, {
+    const response = await axiosInstance(proxyUrl, {
       headers: {
         "X-API-KEY": process.env.API_KEY,
         accept: "application/json",

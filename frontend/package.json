@@ -51,6 +51,5 @@
     "css-minimizer-webpack-plugin": "^7.0.0",
     "sass": "^1.81.0",
     "sass-loader": "^16.0.3"
-  },
-  "proxy": "http://localhost:5000/"
+  }
 }

@@ -1,13 +1,13 @@
 import React from "react";
 import { Modal, message, Form, Input } from "antd";
-import axios from "axios";
+import axiosInstance from "../utils/axiosInstance";
 
 const WalletRegisterModal = ({ visible, onOk, onClose }) => {
   const [form] = Form.useForm();
 
   const handleSave = async (values) => {
     try {
-      await axios.post("/api/wallets", values);
+      await axiosInstance.post("/api/wallets", values);
       message.success("Register successful!");
       form.resetFields();
       onOk();

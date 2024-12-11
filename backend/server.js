@@ -29,6 +29,8 @@ moment.locale("fr");
 // require("./utils/cronJob");
 
 const app = express();
+app.use(cors());
+app.options("*", cors());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -36,7 +38,6 @@ const io = new Server(server, {
   },
 });
 
-app.use(cors());
 app.use(bodyParser.json());
 app.use(express.json());
 app.use(morgan("combined"));

@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { Table, Button } from "antd";
 import moment from "moment";
-import axios from "axios";
+import axiosInstance from "../utils/axiosInstance";
 import { io } from "socket.io-client";
 
 const NewProjects = () => {
   const [tokens, setTokens] = useState([]);
 
   useEffect(() => {
-    const socketConnection = io(process.env.SOCKET_URL);
+    const socketConnection = io("http://localhost:5000");
 
     // Fetch initial data
     const fetchTokens = async () => {
-      const response = await axios.get("/api/ethtoken");
+      const response = await axiosInstance.get("/api/ethtoken");
       setTokens(response.data);
     };
 

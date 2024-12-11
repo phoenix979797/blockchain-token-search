@@ -1,6 +1,7 @@
 const ethers = require("ethers");
 const axios = require("axios");
 const sleep = require("../utils/sleep");
+const Token = require("../model/Token");
 
 // Basic ERC20 ABI for getting symbol
 const ERC20_ABI = [
@@ -172,6 +173,12 @@ exports.getLogs = async (req, res) => {
     const ethUSDPrice = await fetchETHUSDPrice();
     // const ethUSDPrice = 1474.26;
     console.log(ethUSDPrice);
+
+    const token = await Token.findOne({
+      tokenAddress: token0Address.toLowerCase(),
+      "tokenCard.poolAddress": pairAddress.toLowerCase(),
+    });
+
     logs.reverse();
     const result = [];
     for (
@@ -242,20 +249,30 @@ exports.getLogs = async (req, res) => {
       );
       await sleep(process.env.API_RATE_LIMIT);
 
+      let rate = amountToken1.toString().split(".")[0].length - 1;
+
+      const maker = transaction?.data?.result?.from;
+
       result.push({
         datetime,
         tradeType,
-        priceUSD: priceUSD.toFixed(18),
-        priceETH: priceETH.toFixed(18),
+        priceUSD: priceUSD.toFixed(18) * 10 ** -rate,
+        priceETH: priceETH.toFixed(18) * 10 ** -rate,
         totalETH: totalETH.toFixed(18), // Total in ETH
         totalUSD: totalUSD.toFixed(18), // Total in USD
-        amountToken2: amountToken1.toFixed(DECIMALS_TOKEN1),
-        amountToken1: amountToken2.toFixed(DECIMALS_TOKEN2),
-        maker: transaction?.data?.result?.from,
+        amountToken2: amountToken1.toFixed(18) * 10 ** -rate,
+        amountToken1: amountToken2.toFixed(18) * 10 ** rate,
+        maker,
         sender,
         to,
         hash: logs[i].hash,
         transactionHash: logs[i].transactionHash,
+        name:
+          token?.addWallet == maker
+            ? token?.nameAddWallet
+            : token?.walletFirstTransaction == maker
+            ? token?.nameWalletFirstTransaction
+            : "",
       });
     }
 

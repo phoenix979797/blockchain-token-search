@@ -1,7 +1,8 @@
 // App.js
 import React, { useState } from "react";
-import axios from "axios";
+import axiosInstance from "../utils/axiosInstance";
 import { Table, Pagination } from "antd";
+import moment from "moment";
 
 function TokenVisualization() {
   const [pairAddress, setPairAddress] = useState("");
@@ -13,21 +14,24 @@ function TokenVisualization() {
   const [pageSize, setPageSize] = useState(5);
   const [total, setTotal] = useState(0);
 
-  const handleTransaction = async () => {
+  const handleTransaction = async (page, size) => {
     try {
-      const symbolResponse = await axios.get("/api/transaction/symbol", {
-        params: { pairAddress },
-      });
+      const symbolResponse = await axiosInstance.get(
+        "/api/transaction/symbol",
+        {
+          params: { pairAddress },
+        }
+      );
 
       if (symbolResponse.data?.success) {
         const { pairInfo } = symbolResponse.data.data;
         setSymbol1(pairInfo.token0.symbol);
         setSymbol2(pairInfo.token1.symbol);
-        const { data } = await axios.get("/api/transaction/logs", {
+        const { data } = await axiosInstance.get("/api/transaction/logs", {
           params: {
             pairAddress,
-            pageNum,
-            pageSize,
+            pageNum: page,
+            pageSize: size,
           },
         });
         setTotal(data.total);
@@ -39,44 +43,107 @@ function TokenVisualization() {
     setLoading(false);
   };
 
+  const formatNumber = (num) => {
+    if (num === null || num === undefined) return "";
+
+    num = Number(num);
+
+    if (num >= 10)
+      return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+    if (num >= 1) return num.toFixed(4);
+
+    // Convert to string and remove any existing formatting
+    let str = num.toString().toLowerCase();
+
+    if (str.includes("e-")) {
+      const [base, exponent] = str.split("e-");
+      const zeros = parseInt(exponent) - 1;
+      return (
+        <>
+          0.0<sub>{zeros}</sub>
+          {base[0] + base.slice(2, 5)}
+        </>
+      );
+    }
+
+    // Handle regular decimal numbers
+    if (str.includes(".")) {
+      const [, decimal] = str.split(".");
+      let leadingZeros = 0;
+
+      // Count leading zeros in decimal
+      for (let i = 0; i < decimal.length; i++) {
+        if (decimal[i] === "0") {
+          leadingZeros++;
+        } else {
+          break;
+        }
+      }
+
+      if (leadingZeros <= 2) return `0.${decimal.slice(0, 4 + leadingZeros)}`;
+      else {
+        return (
+          <>
+            0.0<sub>{leadingZeros}</sub>
+            {decimal.slice(leadingZeros, 4 + leadingZeros)}
+          </>
+        );
+      }
+    }
+
+    return str;
+  };
+
   const columns = [
+    {
+      title: "Name",
+      dataIndex: "name",
+      key: "name",
+    },
     {
       title: "Datetime",
       dataIndex: "datetime",
       key: "datetime",
-      render: (date) => new Date(date).toLocaleString(), // Format date
+      render: (date) => moment(date).format("MMM DD HH:mm:ss"), // Format date
     },
     {
       title: "Type",
       dataIndex: "tradeType",
       key: "tradeType",
+      render: (tradeType) => (
+        <div className="trade-type">{tradeType.toUpperCase()}</div>
+      ),
     },
     {
       title: "Price USD",
       dataIndex: "priceUSD",
       key: "priceUSD",
-      render: (price) => "$" + price,
+      render: (price) => <p>${formatNumber(price)}</p>,
     },
     {
       title: "Total USD",
       dataIndex: "totalUSD",
       key: "totalUSD",
-      render: (price) => "$" + price,
+      render: (price) => <p>${formatNumber(price)}</p>,
     },
     {
       title: "Price ETH",
       dataIndex: "priceETH",
       key: "priceETH",
+      render: (price) => formatNumber(price),
     },
     {
       title: `Amount ${symbol1}`,
       dataIndex: "amountToken1",
       key: "amountToken1",
+      render: (price) => formatNumber(price),
     },
     {
       title: `Amount ${symbol2}`,
       dataIndex: "amountToken2",
       key: "amountToken2",
+      render: (price) => formatNumber(price),
     },
     {
       title: "Maker",
@@ -103,7 +170,9 @@ function TokenVisualization() {
           <button
             style={{ height: "100%", marginRight: 5 }}
             onClick={() =>
-              setPageNum(1) || setLoading(true) || handleTransaction().then()
+              setPageNum(1) ||
+              setLoading(true) ||
+              handleTransaction(1, pageSize).then()
             }
           >
             Fetch Transactions
@@ -121,13 +190,19 @@ function TokenVisualization() {
               Price Chart - {symbol1}/{symbol2 || "Loading..."}
             </h3>
           </div>
-          <iframe
-            id="dextools-widget"
-            title="DEXTools Trading Chart"
-            width="500"
-            height="400"
-            src={`https://www.dextools.io/widget-chart/en/ether/pe-light/${pairAddress}?theme=light&chartType=2&chartResolution=30&drawingToolbars=false`}
-          ></iframe>
+          <div style={{ width: "100%", height: "400px" }}>
+            {pairAddress ? (
+              <iframe
+                id="dextools-widget"
+                title="DEXTools Trading Chart"
+                width="100%"
+                height="100%"
+                src={`https://www.dextools.io/widget-chart/en/ether/pe-light/${pairAddress}?theme=light&chartType=2&chartResolution=30&drawingToolbars=false`}
+              ></iframe>
+            ) : (
+              <></>
+            )}
+          </div>
         </div>
 
         <div className="trade-table">
@@ -137,8 +212,11 @@ function TokenVisualization() {
             style={{ overflowX: "auto" }}
             scroll={{ x: "max-content" }}
             dataSource={transactions || []}
-            rowKey={(record) =>
-              record.datetime + record.priceUSD + record.maker
+            rowKey={(record, index) =>
+              record.datetime + record.priceUSD + record.maker + index
+            }
+            rowClassName={(record) =>
+              record.tradeType === "buy" ? "buy-row" : "sell-row"
             }
             pagination={false}
           />
@@ -147,10 +225,11 @@ function TokenVisualization() {
             total={total}
             pageSize={pageSize}
             onChange={(page, size) =>
-              setPageNum(page) ||
-              setPageSize(size) ||
-              setLoading(true) ||
-              handleTransaction().then()
+              !loading &&
+              (setPageNum(page) ||
+                setPageSize(size) ||
+                setLoading(true) ||
+                handleTransaction(page, size).then())
             }
             style={{ marginTop: "20px", textAlign: "right", display: "block" }}
           />

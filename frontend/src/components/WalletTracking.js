@@ -1,6 +1,6 @@
 // client/src/components/WalletTable.js
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import axiosInstance from "../utils/axiosInstance";
 import { Table, Button, Popconfirm, message } from "antd";
 import WalletStatsModal from "./WalletStatsModal";
 import WalletRegisterModal from "./WalletRegisterModal";
@@ -14,7 +14,7 @@ const WalletTable = () => {
 
   const fetchWallets = async () => {
     try {
-      const response = await axios.get("/api/wallets"); // Assuming you have an endpoint to get all wallets
+      const response = await axiosInstance.get("/api/wallets"); // Assuming you have an endpoint to get all wallets
       setWallets(response.data);
     } catch (error) {
       console.error("Error fetching wallets:", error);
@@ -31,7 +31,7 @@ const WalletTable = () => {
   // Handle toggling the wallet's status
   const handleToggleStatus = async (walletId, currentStatus) => {
     try {
-      await axios.patch(`/api/wallets/${walletId}/status`);
+      await axiosInstance.patch(`/api/wallets/${walletId}/status`);
       setWallets((prevWallets) =>
         prevWallets.map((wallet) =>
           wallet._id === walletId

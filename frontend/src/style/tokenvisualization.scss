@@ -42,3 +42,17 @@
     transform: rotate(360deg);
   }
 }
+
+.buy-row {
+  color: #1abb6e;
+  .trade-type {
+    color: #3effa1;
+  }
+}
+
+.sell-row {
+  color: #d13942;
+  .trade-type {
+    color: #ff000e;
+  }
+}
